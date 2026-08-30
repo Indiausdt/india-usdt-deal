@@ -42,7 +42,10 @@ import {
   ShieldCheck,
   UserRound,
 } from "lucide-react";
+import { api, API_URL, getToken, setToken, telegramLogin, type Account, type ApiOffer } from "./api-client";
 type Offer = {
+  id: string;
+  agentId: string;
   name: string;
   initials: string;
   avatar?: string;
@@ -105,6 +108,8 @@ const AvatarFace = ({ value }: { value: string }) => {
   );
 };
 export default function Home() {
+  const [userToken, setUserToken] = useState("");
+  const [account, setAccount] = useState<Account | null>(null);
   const [agentProfile, setAgentProfile] = useState({
       name: "Agent",
       trades: "0",
@@ -114,28 +119,45 @@ export default function Home() {
     [agentBlocked, setAgentBlocked] = useState(false),
     [publishedOffers, setPublishedOffers] = useState<Offer[]>([]);
   useEffect(() => {
-    const sync = () => {
-      try {
-        const saved = localStorage.getItem("indiausdt-agent-profile");
-        if (saved) {
-          const profile = JSON.parse(saved);
-          if (String(profile.avatar || "").startsWith("blob:"))
-            profile.avatar = "";
-          setAgentProfile(profile);
-        }
-        const blocked =
-          localStorage.getItem("indiausdt-agent-blocked") === "true";
-        setAgentBlocked(blocked);
-        const raw = JSON.parse(
-          localStorage.getItem("indiausdt-agent-published-orders") || "[]",
-        );
-        setPublishedOffers(blocked ? [] : raw);
-      } catch {
-        setPublishedOffers([]);
-      }
-    };
-    sync();
-    const timer = window.setInterval(sync, 1000);
+    const savedToken = getToken("user");
+    if (savedToken) {
+      setUserToken(savedToken);
+      api<Account>("/me", {}, savedToken).then(setAccount).catch(() => {});
+      return;
+    }
+    telegramLogin().then((result) => {
+      setToken("user", result.token);
+      setUserToken(result.token);
+      setAccount(result.account);
+      setUserName(result.account.displayName || "");
+      setUserId(result.account.mobileNumber || "");
+    }).catch(() => {});
+  }, []);
+  useEffect(() => {
+    const loadOffers = () =>
+      api<ApiOffer[]>("/offers")
+        .then((rows) =>
+          setPublishedOffers(
+            rows.map((offer) => ({
+              id: offer.id,
+              agentId: offer.agentId,
+              name: offer.agentName,
+              initials: (offer.agentName || "AG").slice(0, 2).toUpperCase(),
+              avatar: offer.agentAvatar || "",
+              rate: Number(offer.rate),
+              min: Number(offer.minInr),
+              max: Number(offer.maxInr),
+              available: Number(offer.availableUsdt).toFixed(2),
+              methods: [offer.paymentMethod],
+              time: "30 min",
+              trades: Number(offer.trades || 0),
+              success: `${Number(offer.successRate || 0).toFixed(2)}%`,
+            })),
+          ),
+        )
+        .catch(() => setPublishedOffers([]));
+    loadOffers();
+    const timer = window.setInterval(loadOffers, 15000);
     return () => window.clearInterval(timer);
   }, []);
   const [side, setSide] = useState<"buy" | "sell">("buy"),
@@ -308,6 +330,7 @@ export default function Home() {
       : notify("WhatsApp Support link has not been added yet");
   };
   const [activeOrder, setActiveOrder] = useState<{
+    id: string;
     agent: Offer;
     amount: number;
     usdt: string;
@@ -360,15 +383,41 @@ export default function Home() {
     const list = messagesRef.current;
     if (list) list.scrollTop = list.scrollHeight;
   }, [messages]);
-  const sendMessage = () => {
+  useEffect(() => {
+    if (!activeOrder?.id || !userToken || !account) return;
+    const load = () => api<any[]>(`/orders/${activeOrder.id}/messages`, {}, userToken)
+      .then((rows) => setMessages(rows.map((message) => ({
+        from: message.senderId === account.id ? "user" : "agent",
+        text: message.body || undefined,
+        image: message.imageId ? `${API_URL}/uploads/${message.imageId}` : undefined,
+        time: new Date(message.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }),
+        status: message.status,
+      }))))
+      .catch(() => {});
+    load();
+    api(`/orders/${activeOrder.id}/seen`, { method: "POST" }, userToken).catch(() => {});
+    const socketUrl = API_URL.replace(/^http/, "ws");
+    const socket = new WebSocket(`${socketUrl}/realtime?token=${encodeURIComponent(userToken)}`);
+    socket.onmessage = () => load();
+    return () => socket.close();
+  }, [activeOrder?.id, userToken, account?.id]);
+  const sendMessage = async () => {
     const text = messageText.trim();
-    if (!text) return;
+    if (!text || !activeOrder || !userToken) return;
     const time = new Date().toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
     });
-    setMessages((v) => [...v, { from: "user", text, time, status: "sent" }]);
-    setMessageText("");
+    try {
+      const saved = await api<any>(`/orders/${activeOrder.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ body: text }),
+      }, userToken);
+      setMessages((v) => [...v, { from: "user", text, time, status: saved.status || "sent" }]);
+      setMessageText("");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Message not sent");
+    }
   };
   const profileMenu = (
     <section className="profileMenuScreen">
@@ -592,7 +641,7 @@ export default function Home() {
         >
           <form
             onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!userPhoto.startsWith("avatar:")) {
                 notify("Please choose an avatar.");
@@ -603,12 +652,20 @@ export default function Home() {
                 return;
               }
               setPhoneError("");
-              localStorage.setItem(
-                "indiausdt-user-profile",
-                JSON.stringify({ name: userName, userId, photo: userPhoto }),
-              );
-              setProfileEditorOpen(false);
-              notify("Profile saved successfully");
+              try {
+                if (userToken) {
+                  const updated = await api<Account>("/me", {
+                    method: "PATCH",
+                    body: JSON.stringify({ displayName: userName, mobileNumber: userId }),
+                  }, userToken);
+                  setAccount(updated);
+                }
+                localStorage.setItem("indiausdt-user-profile", JSON.stringify({ name: userName, userId, photo: userPhoto }));
+                setProfileEditorOpen(false);
+                notify("Profile saved successfully");
+              } catch (error) {
+                notify(error instanceof Error ? error.message : "Profile could not be saved");
+              }
             }}
           >
             <div className="sheetHandle" />
@@ -717,17 +774,15 @@ export default function Home() {
                   </button>
                   <button
                     className="cancelMenuAction"
-                    onClick={() => {
-                      setActiveOrder({ ...activeOrder, status: "cancelled" });
-                      setMessages((v) => [
-                        ...v,
-                        {
-                          from: "agent",
-                          text: "This order has been cancelled.",
-                          time: "Now",
-                        },
-                      ]);
-                      setShowOrderMenu(false);
+                    onClick={async () => {
+                      try {
+                        await api(`/orders/${activeOrder.id}/cancel`, { method: "POST" }, userToken);
+                        setActiveOrder({ ...activeOrder, status: "cancelled" });
+                        setMessages((v) => [...v, { from: "agent", text: "This order has been cancelled.", time: "Now" }]);
+                        setShowOrderMenu(false);
+                      } catch (error) {
+                        notify(error instanceof Error ? error.message : "Order could not be cancelled");
+                      }
                     }}
                   >
                     <span>×</span>
@@ -802,18 +857,23 @@ export default function Home() {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => {
+                        onChange={async (e) => {
                           const file = e.target.files?.[0];
-                          if (!file) return;
-                          setMessages((v) => [
-                            ...v,
-                            {
-                              from: "user",
-                              image: URL.createObjectURL(file),
-                              time: "Now",
-                              status: "sent",
-                            },
-                          ]);
+                          if (!file || !activeOrder || !userToken) return;
+                          try {
+                            const upload = await api<{ id: string; url: string }>("/uploads", {
+                              method: "POST",
+                              headers: { "Content-Type": file.type },
+                              body: file,
+                            }, userToken);
+                            await api(`/orders/${activeOrder.id}/messages`, {
+                              method: "POST",
+                              body: JSON.stringify({ imageId: upload.id }),
+                            }, userToken);
+                            setMessages((v) => [...v, { from: "user", image: `${API_URL}${upload.url}`, time: "Now", status: "sent" }]);
+                          } catch (error) {
+                            notify(error instanceof Error ? error.message : "Image could not be sent");
+                          }
                           e.target.value = "";
                         }}
                       />
@@ -1318,27 +1378,39 @@ export default function Home() {
             </div>
             <button
               className="continue"
-              onClick={() => {
+              onClick={async () => {
                 const n = Number(orderAmount);
                 if (n < selected.min || n > selected.max)
                   return notify(
                     `Enter ₹${money(selected.min)} – ₹${money(selected.max)}`,
                   );
-                const usdt = (n / selected.rate).toFixed(2);
+                if (!userToken) {
+                  notify("Open the mini app from Telegram to place an order");
+                  return;
+                }
                 const paymentMethod =
                   payment === "All payments" ? selected.methods[0] : payment;
-                setActiveOrder({
-                  agent: selected,
-                  amount: n,
-                  usdt,
-                  side,
-                  paymentMethod,
-                  status: "active",
-                });
-                setMessages([]);
-                setSelected(null);
-                setNav("Chat");
-                setChatOpen(true);
+                try {
+                  const created = await api<any>("/orders", {
+                    method: "POST",
+                    body: JSON.stringify({ offerId: selected.id, amountInr: n }),
+                  }, userToken);
+                  setActiveOrder({
+                    id: created.id,
+                    agent: selected,
+                    amount: Number(created.amount_inr || n),
+                    usdt: Number(created.amount_usdt || n / selected.rate).toFixed(2),
+                    side,
+                    paymentMethod,
+                    status: "active",
+                  });
+                  setMessages([]);
+                  setSelected(null);
+                  setNav("Chat");
+                  setChatOpen(true);
+                } catch (error) {
+                  notify(error instanceof Error ? error.message : "Order could not be created");
+                }
               }}
             >
               Continue
