@@ -1,0 +1,43 @@
+.agentOfferFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #edf1ef;
+}
+
+.agentOfferFoot > b {
+  color: #0a9a68;
+  font-size: 8px;
+}
+
+.agentOfferFoot aside {
+  display: flex;
+  gap: 6px;
+}
+
+.agentOfferFoot button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #dce7e2;
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #f5faf8;
+  color: #087a55;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.agentOfferFoot button.delete {
+  border-color: #f2d8da;
+  background: #fff5f6;
+  color: #c93643;
+}
+
+.agentOfferFoot svg {
+  width: 12px;
+  height: 12px;
+}
