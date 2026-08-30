@@ -346,6 +346,40 @@ app.get("/uploads/:id", asyncRoute(async (req, res) => {
   res.set("Content-Type", rows[0].mime_type).set("Cache-Control", "private,max-age=86400").send(rows[0].content);
 }));
 
+const telegramApi = async (method, payload) => {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return null;
+  const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json();
+  if (!result.ok) throw new Error(`Telegram ${method} failed: ${result.description || response.status}`);
+  return result.result;
+};
+
+app.post("/telegram/webhook", asyncRoute(async (req, res) => {
+  const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (expected && req.headers["x-telegram-bot-api-secret-token"] !== expected)
+    return res.status(403).json({ error: "Invalid Telegram webhook" });
+  const message = req.body?.message;
+  if (!message?.chat?.id) return res.json({ ok: true });
+  const command = String(message.text || "").split(/\s+/)[0].toLowerCase();
+  if (command === "/start") {
+    await telegramApi("sendMessage", {
+      chat_id: message.chat.id,
+      text: "Welcome to India USDT Deal 🇮🇳\n\nBuy or sell USDT with verified P2P agents. Tap the button below to open the secure Mini App.",
+      reply_markup: {
+        inline_keyboard: [[{
+          text: "🚀 Open India USDT Deal",
+          web_app: { url: process.env.FRONTEND_ORIGIN },
+        }]],
+      },
+    });
+  }
+  res.json({ ok: true });
+}));
+
 app.get("/admin/agents", auth("admin"), asyncRoute(async (_req, res) => {
   const { rows } = await pool.query("SELECT * FROM accounts WHERE role='agent' ORDER BY created_at DESC");
   res.json(rows.map(publicAccount));
@@ -438,6 +472,19 @@ async function initialize() {
     ) AND u.created_at < NOW() - INTERVAL '15 days'`);
   };
   await cleanup();
+  if (process.env.TELEGRAM_BOT_TOKEN && process.env.BACKEND_PUBLIC_URL) {
+    const webhookUrl = `${process.env.BACKEND_PUBLIC_URL.replace(/\/$/, "")}/telegram/webhook`;
+    await telegramApi("setWebhook", {
+      url: webhookUrl,
+      secret_token: process.env.TELEGRAM_WEBHOOK_SECRET || undefined,
+      allowed_updates: ["message"],
+      drop_pending_updates: true,
+    });
+    await telegramApi("setMyCommands", {
+      commands: [{ command: "start", description: "Open India USDT Deal" }],
+    });
+    console.log(`Telegram webhook configured at ${webhookUrl}`);
+  }
   setInterval(() => cleanup().catch(console.error), 3_600_000).unref();
   server.listen(Number(process.env.PORT || 8080), "0.0.0.0", () =>
     console.log(`API listening on port ${process.env.PORT || 8080}`),
