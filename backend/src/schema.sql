@@ -78,6 +78,21 @@ CREATE TABLE IF NOT EXISTS uploads (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS hero_banners (
+  id UUID PRIMARY KEY,
+  image_id UUID NOT NULL REFERENCES uploads(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS sell_posts (
+  id UUID PRIMARY KEY,
+  message TEXT NOT NULL,
+  price TEXT NOT NULL,
+  link TEXT NOT NULL,
+  image_id UUID NOT NULL REFERENCES uploads(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS offers_active_idx ON offers(active, created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_user_idx ON trade_orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_agent_idx ON trade_orders(agent_id, created_at DESC);
