@@ -425,9 +425,21 @@ export default function Home() {
     api(`/orders/${activeOrder.id}/seen`, { method: "POST" }, userToken).catch(() => {});
     const socketUrl = API_URL.replace(/^http/, "ws");
     const socket = new WebSocket(`${socketUrl}/realtime?token=${encodeURIComponent(userToken)}`);
-    socket.onmessage = () => load();
-    return () => socket.close();
-  }, [activeOrder?.id, userToken, account?.id]);
+    socket.onmessage = () => {
+      load();
+      if (chatOpen)
+        api(`/orders/${activeOrder.id}/seen`, { method: "POST" }, userToken).catch(() => {});
+    };
+    const syncTimer = window.setInterval(() => {
+      load();
+      if (chatOpen)
+        api(`/orders/${activeOrder.id}/seen`, { method: "POST" }, userToken).catch(() => {});
+    }, 3000);
+    return () => {
+      window.clearInterval(syncTimer);
+      socket.close();
+    };
+  }, [activeOrder?.id, userToken, account?.id, chatOpen]);
   const sendMessage = async () => {
     const text = messageText.trim();
     if (!text || !activeOrder || !userToken) return;
