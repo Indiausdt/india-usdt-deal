@@ -27,6 +27,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { api, clearToken, getToken, login, setToken, type Account } from "../api-client";
 
 const orders = [
   {
@@ -68,6 +69,10 @@ type SellPost = {
 type HeroBanner = { id: number; imageKey: string; createdAt: number };
 export default function AdminControl() {
   const [logged, setLogged] = useState(false),
+    [adminEmail, setAdminEmail] = useState(""),
+    [adminPassword, setAdminPassword] = useState(""),
+    [loginError, setLoginError] = useState(""),
+    [loginBusy, setLoginBusy] = useState(false),
     [show, setShow] = useState(false),
     [tab, setTab] = useState("Dashboard"),
     [range, setRange] = useState("30 Days"),
@@ -83,6 +88,13 @@ export default function AdminControl() {
     [whatsappLink, setWhatsappLink] = useState(""),
     [linksSaved, setLinksSaved] = useState(false),
     [linksError, setLinksError] = useState("");
+  useEffect(() => {
+    const token = getToken("admin");
+    if (!token) return;
+    api<Account>("/me", {}, token)
+      .then((account) => account.role === "admin" && setLogged(true))
+      .catch(() => clearToken("admin"));
+  }, []);
   const [agentData, setAgentData] = useState({
     name: "GlobalTradeBizInc",
     trades: "266",
@@ -90,6 +102,42 @@ export default function AdminControl() {
     avatar: "",
     rate: "103.25",
   });
+  const [realAgents, setRealAgents] = useState<Account[]>([]);
+  const [newAgentName, setNewAgentName] = useState("");
+  const [newAgentEmail, setNewAgentEmail] = useState("");
+  const [newAgentPassword, setNewAgentPassword] = useState("");
+  const [agentError, setAgentError] = useState("");
+  const loadAgents = () => api<Account[]>("/admin/agents", {}, getToken("admin"))
+    .then(setRealAgents)
+    .catch((error) => setAgentError(error instanceof Error ? error.message : "Could not load agents"));
+  useEffect(() => {
+    if (logged && tab === "Agents") loadAgents();
+  }, [logged, tab]);
+  const createAgent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setAgentError("");
+    try {
+      await api<Account>("/admin/agents", {
+        method: "POST",
+        body: JSON.stringify({ displayName: newAgentName, email: newAgentEmail, password: newAgentPassword }),
+      }, getToken("admin"));
+      setNewAgentName(""); setNewAgentEmail(""); setNewAgentPassword("");
+      await loadAgents();
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : "Could not create agent");
+    }
+  };
+  const setAgentBlock = async (agent: Account) => {
+    try {
+      await api(`/admin/agents/${agent.id}/block`, {
+        method: "POST",
+        body: JSON.stringify({ blocked: !agent.blocked }),
+      }, getToken("admin"));
+      await loadAgents();
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : "Could not update agent");
+    }
+  };
   const [sellPosts, setSellPosts] = useState<SellPost[]>([]),
     [sellMessage, setSellMessage] = useState(""),
     [sellPrice, setSellPrice] = useState(""),
@@ -233,16 +281,27 @@ export default function AdminControl() {
           <h1>Admin Control Center</h1>
           <p>Authorized platform administrators only</p>
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
-              setLogged(true);
+              setLoginBusy(true);
+              setLoginError("");
+              try {
+                const result = await login(adminEmail, adminPassword);
+                if (result.account.role !== "admin") throw new Error("Admin access required");
+                setToken("admin", result.token);
+                setLogged(true);
+              } catch (error) {
+                setLoginError(error instanceof Error ? error.message : "Login failed");
+              } finally {
+                setLoginBusy(false);
+              }
             }}
           >
             <label>
               Admin ID
               <div>
                 <ShieldCheck />
-                <input required placeholder="Enter Admin ID" />
+                <input required type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} placeholder="admin@indiausdtdeal.com" />
               </div>
             </label>
             <label>
@@ -251,7 +310,9 @@ export default function AdminControl() {
                 <LockKeyhole />
                 <input
                   required
-                  minLength={6}
+                  minLength={8}
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
                   type={show ? "text" : "password"}
                   placeholder="Enter secure password"
                 />
@@ -260,7 +321,8 @@ export default function AdminControl() {
                 </button>
               </div>
             </label>
-            <button>Continue securely</button>
+            {loginError && <p className="agentError">{loginError}</p>}
+            <button disabled={loginBusy}>{loginBusy ? "Checking…" : "Continue securely"}</button>
           </form>
           <small>
             <LockKeyhole /> This private route is not visible to users or
@@ -458,6 +520,25 @@ export default function AdminControl() {
                 title="Agents"
                 text="Manage verified P2P agents and performance"
               />
+              <form onSubmit={createAgent} className="sellPostComposer">
+                <header><div><b>Create verified agent</b><small>The agent will use this email and password in the hidden Agent Portal.</small></div></header>
+                <label>Display name<input required value={newAgentName} onChange={(e) => setNewAgentName(e.target.value)} placeholder="Agent business name" /></label>
+                <label>Email<input required type="email" value={newAgentEmail} onChange={(e) => setNewAgentEmail(e.target.value)} placeholder="agent@example.com" /></label>
+                <label>Temporary password<input required minLength={8} type="password" value={newAgentPassword} onChange={(e) => setNewAgentPassword(e.target.value)} placeholder="Minimum 8 characters" /></label>
+                {agentError && <p className="agentError">{agentError}</p>}
+                <button>Create agent</button>
+              </form>
+              <section className="peopleGrid">
+                {realAgents.map((agent) => (
+                  <article key={agent.id} className={agent.blocked ? "blockedAgent" : ""}>
+                    <span>{agent.avatarUrl ? <img src={agent.avatarUrl} /> : (agent.displayName || "AG").slice(0,2).toUpperCase()}<i /></span>
+                    <b>{agent.displayName}</b>
+                    <small>{agent.blocked ? "Agent blocked" : "Verified agent"}</small>
+                    <div><p>{agent.completedTrades || 0}<small>Completed trades</small></p><p>{Number(agent.successRate || 0).toFixed(2)}%<small>Success rate</small></p></div>
+                    <button onClick={() => setAgentBlock(agent)}>{agent.blocked ? "Unblock agent" : "Block agent"}</button>
+                  </article>
+                ))}
+              </section>
               <section className="peopleGrid">
                 {[
                   [
