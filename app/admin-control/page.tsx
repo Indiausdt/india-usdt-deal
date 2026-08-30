@@ -27,7 +27,7 @@ import {
   WalletCards,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api, clearToken, getToken, login, setToken, type Account } from "../api-client";
+import { API_URL, api, clearToken, getToken, login, setToken, type Account } from "../api-client";
 
 const orders = [
   {
@@ -59,14 +59,14 @@ const orders = [
   },
 ];
 type SellPost = {
-  id: number;
+  id: string;
   message: string;
   price: string;
   link: string;
   imageKey: string;
   createdAt: number;
 };
-type HeroBanner = { id: number; imageKey: string; createdAt: number };
+type HeroBanner = { id: string; imageKey: string; createdAt: number };
 export default function AdminControl() {
   const [logged, setLogged] = useState(false),
     [adminEmail, setAdminEmail] = useState(""),
@@ -180,14 +180,14 @@ export default function AdminControl() {
   }, [tab]);
   useEffect(() => {
     if (tab !== "Sell USDT") return;
-    fetch("/api/sell-posts")
+    fetch(`${API_URL}/content/sell-posts`)
       .then((r) => r.json())
       .then(setSellPosts)
       .catch(() => setSellError("Could not load selling posts."));
   }, [tab]);
   useEffect(() => {
     if (tab !== "Banners") return;
-    fetch("/api/banners")
+    fetch(`${API_URL}/content/banners`)
       .then((r) => r.json())
       .then((data) => setBanners(Array.isArray(data) ? data : []))
       .catch(() => setBannerError("Could not load banners."));
@@ -197,19 +197,18 @@ export default function AdminControl() {
     if (!sellImage) return setSellError("Please choose a post picture.");
     setSellSaving(true);
     setSellError("");
-    const data = new FormData();
-    data.set("image", sellImage);
-    data.set("message", sellMessage);
-    data.set("price", sellPrice);
-    data.set("link", sellLink);
     try {
-      const response = await fetch("/api/sell-posts", {
+      const uploadResponse = await fetch(`${API_URL}/uploads`, {
         method: "POST",
-        body: data,
+        headers: { Authorization: `Bearer ${getToken("admin")}`, "Content-Type": sellImage.type },
+        body: sellImage,
       });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Could not publish post.");
+      const uploaded = await uploadResponse.json();
+      if (!uploadResponse.ok) throw new Error(uploaded.error || "Image upload failed.");
+      const result = await api<SellPost>("/admin/sell-posts", {
+        method: "POST",
+        body: JSON.stringify({ imageId: uploaded.id, message: sellMessage, price: sellPrice, link: sellLink }),
+      }, getToken("admin"));
       setSellPosts((v) => [result, ...v]);
       setSellMessage("");
       setSellPrice("");
@@ -227,13 +226,12 @@ export default function AdminControl() {
       setSellSaving(false);
     }
   };
-  const deleteSellPost = async (id: number) => {
+  const deleteSellPost = async (id: string) => {
     if (!window.confirm("Delete this selling post?")) return;
-    const response = await fetch(`/api/sell-posts?id=${id}`, {
-      method: "DELETE",
-    });
-    if (response.ok) setSellPosts((v) => v.filter((post) => post.id !== id));
-    else setSellError("Could not delete this post.");
+    try {
+      await api(`/admin/sell-posts/${id}`, { method: "DELETE" }, getToken("admin"));
+      setSellPosts((v) => v.filter((post) => post.id !== id));
+    } catch (error) { setSellError(error instanceof Error ? error.message : "Could not delete this post."); }
   };
   const publishBanner = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,16 +240,18 @@ export default function AdminControl() {
       return setBannerError("Maximum 3 banners are allowed.");
     setBannerSaving(true);
     setBannerError("");
-    const data = new FormData();
-    data.set("image", bannerImage);
     try {
-      const response = await fetch("/api/banners", {
+      const uploadResponse = await fetch(`${API_URL}/uploads`, {
         method: "POST",
-        body: data,
+        headers: { Authorization: `Bearer ${getToken("admin")}`, "Content-Type": bannerImage.type },
+        body: bannerImage,
       });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Could not publish banner.");
+      const uploaded = await uploadResponse.json();
+      if (!uploadResponse.ok) throw new Error(uploaded.error || "Image upload failed.");
+      const result = await api<HeroBanner>("/admin/banners", {
+        method: "POST",
+        body: JSON.stringify({ imageId: uploaded.id }),
+      }, getToken("admin"));
       setBanners((v) => [...v, result]);
       setBannerImage(null);
       const input = document.getElementById(
@@ -266,11 +266,12 @@ export default function AdminControl() {
       setBannerSaving(false);
     }
   };
-  const deleteBanner = async (id: number) => {
+  const deleteBanner = async (id: string) => {
     if (!window.confirm("Delete this homepage banner?")) return;
-    const response = await fetch(`/api/banners?id=${id}`, { method: "DELETE" });
-    if (response.ok) setBanners((v) => v.filter((item) => item.id !== id));
-    else setBannerError("Could not delete this banner.");
+    try {
+      await api(`/admin/banners/${id}`, { method: "DELETE" }, getToken("admin"));
+      setBanners((v) => v.filter((item) => item.id !== id));
+    } catch (error) { setBannerError(error instanceof Error ? error.message : "Could not delete this banner."); }
   };
   if (!logged)
     return (
@@ -726,7 +727,7 @@ export default function AdminControl() {
                     sellPosts.map((post) => (
                       <article key={post.id}>
                         <img
-                          src={`/api/sell-posts/image?key=${encodeURIComponent(post.imageKey)}`}
+                          src={`${API_URL}/uploads/${post.imageKey}`}
                           alt="Selling post"
                         />
                         <div>
@@ -885,7 +886,7 @@ export default function AdminControl() {
                       {banners.map((banner, index) => (
                         <article key={banner.id}>
                           <img
-                            src={`/api/banners/image?key=${encodeURIComponent(banner.imageKey)}`}
+                            src={`${API_URL}/uploads/${banner.imageKey}`}
                             alt={`Homepage banner ${index + 1}`}
                           />
                           <span>{index + 1}</span>
