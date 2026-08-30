@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787342268116,
+      "tag": "0000_shallow_warbound",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787396113021,
+      "tag": "0001_powerful_amphibian",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787736669717,
+      "tag": "0002_yielding_ted_forrester",
+      "breakpoints": true
+    }
+  ]
+}
