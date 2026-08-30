@@ -330,7 +330,7 @@ export default function Home() {
     usdt: string;
     side: "buy" | "sell";
     paymentMethod: string;
-    status: "active" | "cancelled";
+    status: "active" | "cancelled" | "completed";
   } | null>(null);
   const [messages, setMessages] = useState<
     {
@@ -346,6 +346,39 @@ export default function Home() {
   const [showOrderMenu, setShowOrderMenu] = useState(false),
     [showHelp, setShowHelp] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  useEffect(() => {
+    if (!userToken || activeOrder) return;
+    api<any[]>("/orders", {}, userToken)
+      .then((rows) => {
+        const row = rows[0];
+        if (!row) return;
+        const orderRate = Number(row.rate || 0);
+        setActiveOrder({
+          id: row.id,
+          agent: {
+            id: row.offer_id,
+            agentId: row.agent_id,
+            name: row.agentName || "Agent",
+            initials: (row.agentName || "AG").slice(0, 2).toUpperCase(),
+            avatar: row.agentAvatar || "",
+            rate: orderRate,
+            min: 0,
+            max: Number(row.amount_inr || 0),
+            available: "0.00",
+            methods: [row.payment_method],
+            time: "30 min",
+            trades: Number(row.agentTrades || 0),
+            success: `${Number(row.agentSuccessRate || 0).toFixed(2)}%`,
+          },
+          amount: Number(row.amount_inr || 0),
+          usdt: Number(row.amount_usdt || 0).toFixed(2),
+          side: row.side || "buy",
+          paymentMethod: row.payment_method,
+          status: row.status,
+        });
+      })
+      .catch(() => {});
+  }, [userToken, activeOrder]);
   useEffect(() => {
     if (!chatOpen) return;
     const viewport = window.visualViewport;
