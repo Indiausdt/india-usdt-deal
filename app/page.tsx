@@ -110,13 +110,7 @@ const AvatarFace = ({ value }: { value: string }) => {
 export default function Home() {
   const [userToken, setUserToken] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
-  const [agentProfile, setAgentProfile] = useState({
-      name: "Agent",
-      trades: "0",
-      success: "0",
-      avatar: "",
-    }),
-    [agentBlocked, setAgentBlocked] = useState(false),
+  const [agentBlocked, setAgentBlocked] = useState(false),
     [publishedOffers, setPublishedOffers] = useState<Offer[]>([]);
   useEffect(() => {
     const savedToken = getToken("user");
@@ -1119,29 +1113,13 @@ export default function Home() {
                       <div className="merchantRow">
                         <div className="merchant">
                           <span className="avatar">
-                            {o.name === "GlobalTradeBizInc" &&
-                            agentProfile.avatar ? (
-                              <img src={agentProfile.avatar} />
-                            ) : (
-                              o.initials
-                            )}
+                            {o.avatar ? <img src={o.avatar} alt={o.name} /> : o.initials}
                             <i />
                           </span>
                           <div>
-                            <strong>
-                              {o.name === "GlobalTradeBizInc"
-                                ? agentProfile.name
-                                : o.name}
-                            </strong>
+                            <strong>{o.name}</strong>
                             <small>
-                              {o.name === "GlobalTradeBizInc"
-                                ? agentProfile.trades
-                                : o.trades}{" "}
-                              trades ·{" "}
-                              {o.name === "GlobalTradeBizInc"
-                                ? `${agentProfile.success}%`
-                                : o.success}{" "}
-                              completion
+                              {o.trades} trades · {o.success} completion
                             </small>
                           </div>
                         </div>
@@ -1170,17 +1148,7 @@ export default function Home() {
                               : "action sellButton"
                           }
                           onClick={() => {
-                            setSelected(
-                              o.name === "GlobalTradeBizInc"
-                                ? {
-                                    ...o,
-                                    name: agentProfile.name,
-                                    avatar: agentProfile.avatar,
-                                    trades: Number(agentProfile.trades),
-                                    success: `${agentProfile.success}%`,
-                                  }
-                                : o,
-                            );
+                            setSelected(o);
                             setOrderAmount(amount);
                           }}
                         >
