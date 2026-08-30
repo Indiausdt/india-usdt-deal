@@ -202,6 +202,42 @@ app.post("/agent/offers", auth("agent"), asyncRoute(async (req, res) => {
   res.status(201).json(rows[0]);
 }));
 
+app.get("/agent/offers", auth("agent"), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,payment_method AS "paymentMethod",rate,min_inr AS "minInr",
+      max_inr AS "maxInr",available_usdt AS "availableUsdt",active
+     FROM offers WHERE agent_id=$1 AND active=TRUE ORDER BY created_at DESC`,
+    [req.account.id],
+  );
+  res.json(rows);
+}));
+
+app.patch("/agent/offers/:id", auth("agent"), asyncRoute(async (req, res) => {
+  const method = String(req.body.paymentMethod || "");
+  const rate = Number(req.body.rate), min = Number(req.body.minInr), max = Number(req.body.maxInr);
+  const available = Number(req.body.availableUsdt || 0);
+  if (!['ATM QR','YONO Cash'].includes(method) || rate <= 0 || min <= 0 || max < min || available < 0)
+    return res.status(400).json({ error: "Invalid offer details" });
+  const { rows } = await pool.query(
+    `UPDATE offers SET payment_method=$1,rate=$2,min_inr=$3,max_inr=$4,
+      available_usdt=$5,updated_at=NOW() WHERE id=$6 AND agent_id=$7 AND active=TRUE
+     RETURNING id,payment_method AS "paymentMethod",rate,min_inr AS "minInr",
+      max_inr AS "maxInr",available_usdt AS "availableUsdt",active`,
+    [method, rate, min, max, available, req.params.id, req.account.id],
+  );
+  if (!rows[0]) return res.status(404).json({ error: "Offer not found" });
+  res.json(rows[0]);
+}));
+
+app.delete("/agent/offers/:id", auth("agent"), asyncRoute(async (req, res) => {
+  const result = await pool.query(
+    "UPDATE offers SET active=FALSE,updated_at=NOW() WHERE id=$1 AND agent_id=$2 AND active=TRUE",
+    [req.params.id, req.account.id],
+  );
+  if (!result.rowCount) return res.status(404).json({ error: "Offer not found" });
+  res.status(204).end();
+}));
+
 app.patch("/agent/profile", auth("agent"), asyncRoute(async (req, res) => {
   const { rows } = await pool.query(
     `UPDATE accounts SET display_name=$1,completed_trades=$2,success_rate=$3,
