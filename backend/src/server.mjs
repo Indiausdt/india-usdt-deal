@@ -282,7 +282,18 @@ app.get("/orders", auth(), asyncRoute(async (req, res) => {
     const { rows } = await pool.query("SELECT * FROM trade_orders ORDER BY created_at DESC LIMIT 250");
     return res.json(rows);
   }
-  const { rows } = await pool.query(`SELECT * FROM trade_orders WHERE ${column}=$1 ORDER BY created_at DESC`, [req.account.id]);
+  const { rows } = await pool.query(
+    `SELECT t.*,t.public_number AS "publicNumber",u.display_name AS "userName",
+      u.avatar_url AS "userAvatar",a.display_name AS "agentName",a.avatar_url AS "agentAvatar",
+      a.completed_trades AS "agentTrades",a.success_rate AS "agentSuccessRate",
+      EXISTS(SELECT 1 FROM user_blocks b WHERE b.agent_id=t.agent_id AND b.user_id=t.user_id) AS "userBlocked",
+      (SELECT COUNT(*)::int FROM messages m WHERE m.order_id=t.id AND m.sender_id<>$1 AND m.status<>'seen') AS "unreadCount",
+      (SELECT COALESCE(m.body,CASE WHEN m.image_id IS NOT NULL THEN 'Image attachment' END)
+       FROM messages m WHERE m.order_id=t.id ORDER BY m.created_at DESC LIMIT 1) AS "lastMessage"
+     FROM trade_orders t JOIN accounts u ON u.id=t.user_id JOIN accounts a ON a.id=t.agent_id
+     WHERE t.${column}=$1 ORDER BY t.created_at DESC`,
+    [req.account.id],
+  );
   res.json(rows);
 }));
 
@@ -366,6 +377,18 @@ app.post("/orders/:id/seen", auth("user","agent"), asyncRoute(async (req, res) =
   );
   for (const row of rows) sendTo(row.sender_id, { type: "messages.seen", orderId: order.id });
   res.json({ seen: rows.length });
+}));
+
+app.delete("/orders/:id", auth("agent"), asyncRoute(async (req, res) => {
+  const order = await orderForParticipant(req.params.id, req.account.id);
+  if (!order || order.agent_id !== req.account.id)
+    return res.status(404).json({ error: "Order not found" });
+  if (!order.closed_at)
+    return res.status(409).json({ error: "Cancel the order before deleting its chat" });
+  if (Date.now() - new Date(order.closed_at).getTime() < 15 * 24 * 60 * 60 * 1000)
+    return res.status(409).json({ error: "Chat must be retained for 15 days after the order closes" });
+  await pool.query("DELETE FROM trade_orders WHERE id=$1", [order.id]);
+  res.status(204).end();
 }));
 
 app.post("/uploads", auth("user","agent","admin"), express.raw({ type: ["image/jpeg","image/png","image/webp"], limit: maxUploadBytes }), asyncRoute(async (req, res) => {
