@@ -1,0 +1,94 @@
+.chatScreen {
+  inset: 0 0 var(--chat-keyboard-offset, 0px);
+  height: auto;
+  overflow: hidden;
+}
+
+.chatTop,
+.orderBanner {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chatTop {
+  z-index: 40;
+  overflow: visible;
+}
+
+.orderBanner {
+  z-index: 2;
+}
+
+.chatTop .orderMenu {
+  z-index: 60 !important;
+  top: 60px !important;
+  right: 8px !important;
+}
+
+.chatAvatar {
+  overflow: hidden;
+}
+
+.chatAvatar > img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.chatAvatar > i {
+  z-index: 2;
+}
+
+.messages {
+  min-height: 0;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.messageComposer,
+.cancelledBar {
+  bottom: var(--chat-keyboard-offset, 0px);
+}
+
+.message small {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+}
+
+.deliveryStatus {
+  display: inline-block;
+  min-width: 12px;
+  color: #718078;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 1;
+  padding-right: 2px;
+}
+
+.deliveryStatus.sent {
+  letter-spacing: 0;
+}
+
+.deliveryStatus.seen {
+  color: #1688e8;
+}
+
+@media (min-width: 600px) {
+  .chatScreen {
+    inset: 22px auto;
+    height: auto;
+  }
+
+  .messageComposer,
+  .cancelledBar {
+    bottom: 0;
+  }
+}

@@ -1,0 +1,10 @@
+.profileEditSheet{align-items:flex-start!important;padding:56px 12px 78px}
+.profileEditSheet form{width:min(100%,416px)!important;max-height:calc(100dvh - 146px);padding:10px 16px 14px!important;border-radius:20px!important;overflow-y:auto;overscroll-behavior:contain}
+.profileEditSheet h2{font-size:16px!important}
+.profileEditSheet form>p{margin-bottom:10px!important}
+.profileEditSheet label{margin:7px 0!important}
+.profileEditSheet input{height:39px!important}
+.sheetPhotoPicker{height:54px!important}
+.sheetPhotoPicker>span{width:38px!important;height:38px!important}
+.profileEditSheet form>button{position:sticky;bottom:0;height:42px!important;margin-top:10px!important;box-shadow:0 -7px 18px #fff,0 7px 16px #0ba9722e}
+@media(max-height:700px){.profileEditSheet{padding-top:28px}.profileEditSheet form{max-height:calc(100dvh - 112px)}}

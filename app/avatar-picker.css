@@ -1,0 +1,11 @@
+.avatarSprite{display:block;width:100%;height:100%;border-radius:50%;object-fit:cover}
+.profileMenuAvatar>.avatarSprite{width:100%;height:100%}
+.avatarPicker{margin:10px 0 8px;padding:10px;border:1px solid #dbe5e1;border-radius:14px;background:#f7faf9}
+.avatarPicker>b{display:block;margin:0 0 8px;color:#34423d;font-size:8px;text-transform:uppercase;letter-spacing:.4px}
+.avatarPicker>div{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.avatarPicker button{position:relative;width:100%;aspect-ratio:1;border:2px solid transparent;border-radius:50%;padding:2px;background:#fff;overflow:hidden;box-shadow:0 2px 8px #193c3214}
+.avatarPicker button .avatarSprite{transform:scale(1.08)}
+.avatarPicker button.selected{border-color:#0aa66f;box-shadow:0 0 0 3px #0aa66f24}
+.avatarPicker button.selected:after{content:"✓";position:absolute;right:0;bottom:0;width:15px;height:15px;display:grid;place-items:center;border:2px solid #fff;border-radius:50%;background:#0aa66f;color:#fff;font-size:8px;font-weight:900}
+.profileEditSheet form{scrollbar-width:none}
+.profileEditSheet form::-webkit-scrollbar{display:none}
