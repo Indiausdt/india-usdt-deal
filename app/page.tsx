@@ -59,14 +59,14 @@ type Offer = {
   success: string;
 };
 type SellPost = {
-  id: number;
+  id: string;
   message: string;
   price: string;
   link: string;
   imageKey: string;
   createdAt: number;
 };
-type HeroBanner = { id: number; imageKey: string; createdAt: number };
+type HeroBanner = { id: string; imageKey: string; createdAt: number };
 const buyOffers: Offer[] = [];
 const sellOffers: Offer[] = [];
 const money = (n: number) =>
@@ -216,7 +216,7 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const load = () =>
-      fetch("/api/sell-posts")
+      fetch(`${API_URL}/content/sell-posts`)
         .then((r) => r.json())
         .then((data) => {
           setSellPosts(Array.isArray(data) ? data : []);
@@ -229,7 +229,7 @@ export default function Home() {
   }, []);
   useEffect(() => {
     const load = () =>
-      fetch("/api/banners")
+      fetch(`${API_URL}/content/banners`)
         .then((r) => r.json())
         .then((data) => setHeroBanners(Array.isArray(data) ? data : []))
         .catch(() => {});
@@ -1077,7 +1077,7 @@ export default function Home() {
                     <img
                       key={banner.id}
                       className={index === heroBannerIndex ? "active" : ""}
-                      src={`/api/banners/image?key=${encodeURIComponent(banner.imageKey)}`}
+                      src={`${API_URL}/uploads/${banner.imageKey}`}
                       alt={`India USDT Deal banner ${index + 1}`}
                     />
                   ))}
@@ -1244,7 +1244,7 @@ export default function Home() {
                   sellPosts.map((post) => (
                     <article key={post.id}>
                       <img
-                        src={`/api/sell-posts/image?key=${encodeURIComponent(post.imageKey)}`}
+                        src={`${API_URL}/uploads/${post.imageKey}`}
                         alt="USDT selling update"
                       />
                       <div className="sellPostContent">
