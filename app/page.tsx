@@ -1384,17 +1384,21 @@ export default function Home() {
                   return notify(
                     `Enter ₹${money(selected.min)} – ₹${money(selected.max)}`,
                   );
-                if (!userToken) {
-                  notify("Open the mini app from Telegram to place an order");
-                  return;
-                }
                 const paymentMethod =
                   payment === "All payments" ? selected.methods[0] : payment;
                 try {
+                  let orderToken = userToken;
+                  if (!orderToken) {
+                    const loginResult = await telegramLogin();
+                    setToken("user", loginResult.token);
+                    setUserToken(loginResult.token);
+                    setAccount(loginResult.account);
+                    orderToken = loginResult.token;
+                  }
                   const created = await api<any>("/orders", {
                     method: "POST",
                     body: JSON.stringify({ offerId: selected.id, amountInr: n }),
-                  }, userToken);
+                  }, orderToken);
                   setActiveOrder({
                     id: created.id,
                     agent: selected,
