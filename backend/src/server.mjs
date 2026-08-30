@@ -405,6 +405,72 @@ app.get("/uploads/:id", asyncRoute(async (req, res) => {
   res.set("Content-Type", rows[0].mime_type).set("Cache-Control", "private,max-age=86400").send(rows[0].content);
 }));
 
+app.get("/content/banners", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,image_id AS "imageKey",EXTRACT(EPOCH FROM created_at)*1000 AS "createdAt"
+     FROM hero_banners ORDER BY created_at ASC`,
+  );
+  res.json(rows);
+}));
+
+app.post("/admin/banners", auth("admin"), asyncRoute(async (req, res) => {
+  const count = await pool.query("SELECT COUNT(*)::int AS total FROM hero_banners");
+  if (Number(count.rows[0]?.total || 0) >= 3)
+    return res.status(400).json({ error: "Maximum 3 banners are allowed." });
+  const imageId = String(req.body.imageId || "");
+  const upload = await pool.query("SELECT 1 FROM uploads WHERE id=$1 AND owner_id=$2", [imageId, req.account.id]);
+  if (!upload.rowCount) return res.status(400).json({ error: "Uploaded banner image not found." });
+  const bannerId = id();
+  const { rows } = await pool.query(
+    `INSERT INTO hero_banners(id,image_id) VALUES($1,$2)
+     RETURNING id,image_id AS "imageKey",EXTRACT(EPOCH FROM created_at)*1000 AS "createdAt"`,
+    [bannerId, imageId],
+  );
+  res.status(201).json(rows[0]);
+}));
+
+app.delete("/admin/banners/:id", auth("admin"), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("DELETE FROM hero_banners WHERE id=$1 RETURNING image_id", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Banner not found." });
+  await pool.query("DELETE FROM uploads WHERE id=$1", [rows[0].image_id]);
+  res.status(204).end();
+}));
+
+app.get("/content/sell-posts", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT id,message,price,link,image_id AS "imageKey",
+      EXTRACT(EPOCH FROM created_at)*1000 AS "createdAt"
+     FROM sell_posts ORDER BY created_at DESC`,
+  );
+  res.json(rows);
+}));
+
+app.post("/admin/sell-posts", auth("admin"), asyncRoute(async (req, res) => {
+  const imageId = String(req.body.imageId || "");
+  const message = String(req.body.message || "").trim();
+  const price = String(req.body.price || "").trim();
+  const link = String(req.body.link || "").trim();
+  if (!message || !price || !link) return res.status(400).json({ error: "All fields are required." });
+  try { new URL(link); } catch { return res.status(400).json({ error: "Please enter a valid link." }); }
+  const upload = await pool.query("SELECT 1 FROM uploads WHERE id=$1 AND owner_id=$2", [imageId, req.account.id]);
+  if (!upload.rowCount) return res.status(400).json({ error: "Uploaded post image not found." });
+  const postId = id();
+  const { rows } = await pool.query(
+    `INSERT INTO sell_posts(id,message,price,link,image_id) VALUES($1,$2,$3,$4,$5)
+     RETURNING id,message,price,link,image_id AS "imageKey",
+      EXTRACT(EPOCH FROM created_at)*1000 AS "createdAt"`,
+    [postId, message, price, link, imageId],
+  );
+  res.status(201).json(rows[0]);
+}));
+
+app.delete("/admin/sell-posts/:id", auth("admin"), asyncRoute(async (req, res) => {
+  const { rows } = await pool.query("DELETE FROM sell_posts WHERE id=$1 RETURNING image_id", [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ error: "Post not found." });
+  await pool.query("DELETE FROM uploads WHERE id=$1", [rows[0].image_id]);
+  res.status(204).end();
+}));
+
 const telegramApi = async (method, payload) => {
   if (!process.env.TELEGRAM_BOT_TOKEN) return null;
   const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
@@ -528,7 +594,9 @@ async function initialize() {
     await pool.query(`DELETE FROM trade_orders WHERE closed_at < NOW() - INTERVAL '15 days'`);
     await pool.query(`DELETE FROM uploads u WHERE NOT EXISTS (
       SELECT 1 FROM messages m WHERE m.image_id=u.id
-    ) AND u.created_at < NOW() - INTERVAL '15 days'`);
+    ) AND NOT EXISTS (SELECT 1 FROM hero_banners b WHERE b.image_id=u.id)
+      AND NOT EXISTS (SELECT 1 FROM sell_posts p WHERE p.image_id=u.id)
+      AND u.created_at < NOW() - INTERVAL '15 days'`);
   };
   await cleanup();
   if (process.env.TELEGRAM_BOT_TOKEN && process.env.BACKEND_PUBLIC_URL) {
