@@ -93,6 +93,18 @@ CREATE TABLE IF NOT EXISTS sell_posts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public_links (
+  id SMALLINT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  buy_tutorial TEXT NOT NULL DEFAULT '',
+  sell_tutorial TEXT NOT NULL DEFAULT '',
+  whatsapp TEXT NOT NULL DEFAULT '',
+  support TEXT NOT NULL DEFAULT '',
+  updates TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO public_links(id) VALUES(1) ON CONFLICT (id) DO NOTHING;
+
 CREATE INDEX IF NOT EXISTS offers_active_idx ON offers(active, created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_user_idx ON trade_orders(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_agent_idx ON trade_orders(agent_id, created_at DESC);

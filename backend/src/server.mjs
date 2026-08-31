@@ -413,6 +413,42 @@ app.get("/content/banners", asyncRoute(async (_req, res) => {
   res.json(rows);
 }));
 
+app.get("/content/public-links", asyncRoute(async (_req, res) => {
+  const { rows } = await pool.query(
+    `SELECT buy_tutorial AS "buyTutorial", sell_tutorial AS "sellTutorial",
+      whatsapp, support, updates FROM public_links WHERE id=1`,
+  );
+  res.json(rows[0] || { buyTutorial: "", sellTutorial: "", whatsapp: "", support: "", updates: "" });
+}));
+
+app.put("/admin/public-links", auth("admin"), asyncRoute(async (req, res) => {
+  const links = {
+    buyTutorial: String(req.body.buyTutorial || "").trim(),
+    sellTutorial: String(req.body.sellTutorial || "").trim(),
+    whatsapp: String(req.body.whatsapp || "").trim(),
+    support: String(req.body.support || "").trim(),
+    updates: String(req.body.updates || "").trim(),
+  };
+  for (const [name, value] of Object.entries(links)) {
+    if (!value) continue;
+    let parsed;
+    try { parsed = new URL(value); } catch { return res.status(400).json({ error: `${name} must be a valid URL.` }); }
+    if (!['https:', 'http:'].includes(parsed.protocol))
+      return res.status(400).json({ error: `${name} must use http or https.` });
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO public_links(id,buy_tutorial,sell_tutorial,whatsapp,support,updates,updated_at)
+     VALUES(1,$1,$2,$3,$4,$5,NOW()) ON CONFLICT(id) DO UPDATE SET
+       buy_tutorial=EXCLUDED.buy_tutorial, sell_tutorial=EXCLUDED.sell_tutorial,
+       whatsapp=EXCLUDED.whatsapp, support=EXCLUDED.support,
+       updates=EXCLUDED.updates, updated_at=NOW()
+     RETURNING buy_tutorial AS "buyTutorial", sell_tutorial AS "sellTutorial",
+       whatsapp, support, updates`,
+    [links.buyTutorial, links.sellTutorial, links.whatsapp, links.support, links.updates],
+  );
+  res.json(rows[0]);
+}));
+
 app.post("/admin/banners", auth("admin"), asyncRoute(async (req, res) => {
   const count = await pool.query("SELECT COUNT(*)::int AS total FROM hero_banners");
   if (Number(count.rows[0]?.total || 0) >= 3)
