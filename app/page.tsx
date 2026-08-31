@@ -71,6 +71,16 @@ const buyOffers: Offer[] = [];
 const sellOffers: Offer[] = [];
 const money = (n: number) =>
   new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
+const openExternalLink = (url: string) => {
+  if (!url) return false;
+  const telegram = (window as any).Telegram?.WebApp;
+  if (telegram) {
+    if (/^https:\/\/t\.me\//i.test(url) && telegram.openTelegramLink) telegram.openTelegramLink(url);
+    else if (telegram.openLink) telegram.openLink(url);
+    else window.open(url, "_blank", "noopener,noreferrer");
+  } else window.open(url, "_blank", "noopener,noreferrer");
+  return true;
+};
 const supportedBanks = [
   ["SBI", "SBI", "#2568a8"],
   ["Bank of Baroda", "BOB", "#f26a21"],
@@ -202,16 +212,14 @@ export default function Home() {
       setUserId(saved.userId || "");
       setUserPhoto(saved.photo || "");
     } catch {}
-    const syncLinks = () => {
-      try {
-        const links = JSON.parse(
-          localStorage.getItem("indiausdt-public-links") || "{}",
-        );
+    const syncLinks = () => fetch(`${API_URL}/content/public-links`)
+      .then((response) => response.json())
+      .then((links) => {
         setPublicLinks((v) => ({ ...v, ...links }));
-      } catch {}
-    };
+        setWhatsappLink(links.whatsapp || "");
+      }).catch(() => {});
     syncLinks();
-    const timer = window.setInterval(syncLinks, 1000);
+    const timer = window.setInterval(syncLinks, 15000);
     return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
@@ -236,16 +244,6 @@ export default function Home() {
     load();
     const refresh = window.setInterval(load, 15000);
     return () => window.clearInterval(refresh);
-  }, []);
-  useEffect(() => {
-    const load = () =>
-      fetch("/api/whatsapp-support")
-        .then((response) => response.json())
-        .then((data) => setWhatsappLink(data.link || ""))
-        .catch(() => {});
-    load();
-    const timer = window.setInterval(load, 15000);
-    return () => window.clearInterval(timer);
   }, []);
   useEffect(() => {
     try {
@@ -485,13 +483,11 @@ export default function Home() {
       <section className="profileMenuGroup">
         <a
           href={publicLinks.buyTutorial || "#"}
-          target={publicLinks.buyTutorial ? "_blank" : undefined}
-          rel="noreferrer"
           onClick={(e) => {
+            e.preventDefault();
             if (!publicLinks.buyTutorial) {
-              e.preventDefault();
               notify("USDT Buy Tutorial link has not been added yet");
-            }
+            } else openExternalLink(publicLinks.buyTutorial);
           }}
         >
           <span className="menuIcon uploadedIcon buyTutorialLogo">
@@ -508,13 +504,11 @@ export default function Home() {
         </a>
         <a
           href={publicLinks.sellTutorial || "#"}
-          target={publicLinks.sellTutorial ? "_blank" : undefined}
-          rel="noreferrer"
           onClick={(e) => {
+            e.preventDefault();
             if (!publicLinks.sellTutorial) {
-              e.preventDefault();
               notify("USDT Sell Tutorial link has not been added yet");
-            }
+            } else openExternalLink(publicLinks.sellTutorial);
           }}
         >
           <span className="menuIcon uploadedIcon buyTutorialLogo sellTutorialLogo">
@@ -553,7 +547,7 @@ export default function Home() {
         </button>
       </section>
       <section className="profileMenuGroup">
-        <a href={publicLinks.support} target="_blank" rel="noreferrer">
+        <a href={publicLinks.support || "#"} onClick={(e) => { e.preventDefault(); publicLinks.support ? openExternalLink(publicLinks.support) : notify("Support link has not been added yet"); }}>
           <span className="menuIcon uploadedIcon helpLogo">
             <img src="/profile-icons/help-support.jpg" alt="Help and Support" />
           </span>
@@ -563,7 +557,7 @@ export default function Home() {
           </p>
           <ChevronRight />
         </a>
-        <a href={publicLinks.updates} target="_blank" rel="noreferrer">
+        <a href={publicLinks.updates || "#"} onClick={(e) => { e.preventDefault(); publicLinks.updates ? openExternalLink(publicLinks.updates) : notify("Updates channel link has not been added yet"); }}>
           <span className="menuIcon uploadedIcon channelLogo">
             <img
               src="/profile-icons/updates-channel.jpg"
