@@ -173,10 +173,16 @@ export default function AdminControl() {
   }, [tab]);
   useEffect(() => {
     if (tab !== "Links") return;
-    fetch("/api/whatsapp-support")
+    fetch(`${API_URL}/content/public-links`)
       .then((response) => response.json())
-      .then((data) => setWhatsappLink(data.link || ""))
-      .catch(() => setLinksError("Could not load WhatsApp support link."));
+      .then((data) => {
+        setBuyTutorialLink(data.buyTutorial || "");
+        setSellTutorialLink(data.sellTutorial || "");
+        setWhatsappLink(data.whatsapp || "");
+        setSupportLink(data.support || "");
+        setUpdatesLink(data.updates || "");
+      })
+      .catch(() => setLinksError("Could not load dashboard links."));
   }, [tab]);
   useEffect(() => {
     if (tab !== "Sell USDT") return;
@@ -935,35 +941,23 @@ export default function AdminControl() {
                   onSubmit={async (e) => {
                     e.preventDefault();
                     setLinksError("");
-                    localStorage.setItem(
-                      "indiausdt-public-links",
-                      JSON.stringify({
-                        support: supportLink,
-                        updates: updatesLink,
-                        buyTutorial: buyTutorialLink,
-                        sellTutorial: sellTutorialLink,
-                      }),
-                    );
                     try {
-                      const response = await fetch("/api/whatsapp-support", {
+                      const result = await api<any>("/admin/public-links", {
                         method: "PUT",
-                        headers: { "content-type": "application/json" },
-                        body: JSON.stringify({ link: whatsappLink }),
-                      });
-                      const result = await response.json();
-                      if (!response.ok)
-                        throw new Error(
-                          result.error ||
-                            "Could not save WhatsApp support link.",
-                        );
-                      setWhatsappLink(result.link);
+                        body: JSON.stringify({
+                          support: supportLink, updates: updatesLink,
+                          buyTutorial: buyTutorialLink, sellTutorial: sellTutorialLink,
+                          whatsapp: whatsappLink,
+                        }),
+                      }, getToken("admin"));
+                      setWhatsappLink(result.whatsapp || "");
                       setLinksSaved(true);
                       window.setTimeout(() => setLinksSaved(false), 2200);
                     } catch (error) {
                       setLinksError(
                         error instanceof Error
                           ? error.message
-                          : "Could not save WhatsApp support link.",
+                          : "Could not save dashboard links.",
                       );
                     }
                   }}
